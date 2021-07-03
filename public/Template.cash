@@ -1,42 +1,20 @@
 pragma cashscript ^0.6.1;
 
-contract Escrow(pubkey arbiterPk, pubkey buyerPk, pubkey sellerPk) {
-    // Require pk to match stored owner and signature to match
+contract Template(pubkey ownerPk) {
     // Warning: Only to be used in testing.
     function reclaim(pubkey pk, sig s) {
+        require(pk == ownerPk);
         require(checkSig(s, pk));
     }
 
-    // Can be called by anyone.
     function spend(
         pubkey pk,
         sig spenderSig,
-        bytes message,
-        datasig signature,
-        //int minerFee,
     ) {  
         // Check that only a single input is used in this transaction by checking
         // that the prevouts are equal to only the current outpoint
         require(tx.hashPrevouts == hash256(tx.outpoint));
-
         // Verify the signature of the sender.
         require(checkSig(spenderSig, pk));
-        int changeAmount = int(bytes(tx.value)); //  - minerFee;
-        int msg = int(message);
-        require(within(msg, 1, 5)); // x >= lower && x < upper
-
-        if (msg % 2 == 0){
-            require(checkDataSig(signature, message, arbiterPk));
-        } else {
-            require(checkDataSig(signature, message, buyerPk));
-        }
-
-        if (msg == 1 || msg == 4){
-            bytes34 payTo = new OutputP2PKH(bytes8(changeAmount), hash160(sellerPk));
-            require(hash256(payTo) == tx.hashOutputs);
-        } else {
-            bytes34 payTo = new OutputP2PKH(bytes8(changeAmount), hash160(buyerPk));
-            require(hash256(payTo) == tx.hashOutputs);
-        }
     }
 }

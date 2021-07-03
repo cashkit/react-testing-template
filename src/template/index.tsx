@@ -1,26 +1,15 @@
 import React, { useEffect, useState } from 'react';
-
-import { BITBOX } from 'bitbox-sdk';
 import { SignatureTemplate } from 'cashscript';
-import { getArbiterWallet, getBuyerWallet, getSellerWallet } from '../wallet';
+import { getOwnerWallet } from '../wallet';
 import { getTemplateContract } from '../contracts';
-import { Signer } from '../utils';
 
-const bitbox = new BITBOX();
 
-const MessageTypes = {
-  One: '1',
-  Two: '2',
-  Three: '3',
-  Four: '4'
-}
-
-const useContract = (arbiterPkh, buyerPkh, sellerPkh) => {
+const useContract = (ownerPkh) => {
   const [ contract, setContract ] = useState();
   const [ amount, setInputAmount ] = useState(0)
   useEffect( () => {
     const makeCall = async () => {
-      getTemplateContract(arbiterPkh, buyerPkh, sellerPkh).then(async (res) => {
+      getTemplateContract(ownerPkh).then(async (res) => {
         setContract(res)
         let amount = 0
         const Utxos = await res.getUtxos()
@@ -48,37 +37,12 @@ const useContract = (arbiterPkh, buyerPkh, sellerPkh) => {
 }
 
 const Contract = () => {
-  const [ messageType, setMessageType ] = useState(MessageTypes.One)
-  const [ typeInfo, setTypeInfo ] = useState("Trade Successful: Money being sent to seller, signed by buyer")
   const [ tx, setTx ] = useState("")
   const [ metaData, setMetaData ] = useState("Metadata:")
-  const [ arbiter, arbiterPk ] = getArbiterWallet()
-  const [ buyer, buyerPk ] = getBuyerWallet()
-  const [ seller, sellerPk ] = getSellerWallet()
+  // eslint-disable-next-line
+  const [ owner, ownerPk, ownerPkh, ownerAddr ] = getOwnerWallet()
 
-  const [ contract, amount ] = useContract(arbiterPk, buyerPk, sellerPk)
-
-  const arbiterAddr = bitbox.ECPair.toCashAddress(arbiter);
-  const buyerAddr = bitbox.ECPair.toCashAddress(buyer);
-  const sellerAddr = bitbox.ECPair.toCashAddress(seller);
-
-  const handleMessageChange = (event) => {
-    const mt = event.target.value
-    if(mt === MessageTypes.One) {
-      setTypeInfo(`Trade Successful: Money being sent to seller, signed by buyer`)
-    }
-    if(mt === MessageTypes.Two){
-      setTypeInfo(`Dispute: Money being sent to buyer, signed by arbiter`)
-    }
-    if(mt === MessageTypes.Three){
-      setTypeInfo(`Trade Cancelled: Money being sent to buyer, signed by buyer`)
-    } 
-    if(mt === MessageTypes.Four){
-      setTypeInfo(`Dispute: Money being sent to seller, signed by arbiter`)
-    }
-
-    setMessageType(mt)
-  }
+  const [ contract, amount ] = useContract(ownerPk)
 
   const reclaim = async () => {
     const minerFee = 450 // Close to min relay fee of the network.
@@ -87,7 +51,7 @@ const Contract = () => {
     setMetaData(`Values in sats: Input Amount: ${amount}, Miner Fee: ${minerFee} change: ${change}`)
 
     const tx = await contract.functions
-    .reclaim(arbiterPk, new SignatureTemplate(arbiter))
+    .reclaim(ownerPk, new SignatureTemplate(owner))
     .to("bitcoincash:qz2g9hg86tpdk0rhk9qg45s6nj3xqqerkvcmz5rrq0", change)
     .send()
 
@@ -101,42 +65,15 @@ const Contract = () => {
     const change = amount - minerFee
     setMetaData(`Values in sats: Input Amount: ${amount}, Miner Fee: ${minerFee} change: ${change}`)
 
-    let signer;
-    let toAddr;
-
-    if (messageType === MessageTypes.One){
-      signer = new Signer(buyer);
-      toAddr = sellerAddr;
-    } else if (messageType === MessageTypes.Two) {
-      signer = new Signer(arbiter);
-      toAddr = buyerAddr;
-    } else if (messageType === MessageTypes.Three) {
-      signer = new Signer(buyer);
-      // Could be to seller as well. Not sure.
-      toAddr = buyerAddr;
-    } else {
-      signer = new Signer(arbiter);
-      toAddr = sellerAddr;
-    }
-
-    // Signed message and signature can be taken from somewhere else as well.
-    const signerMessage = signer.createSingleMessage(parseInt(messageType));
-    const signerSignature = signer.signMessage(signerMessage);
-
-    console.log(signerMessage)
-
     const tx = await contract.functions
       .spend(
-        arbiterPk,
-        new SignatureTemplate(arbiter),
-        signerMessage,
-        signerSignature,
-        //minerFee
+        ownerPk,
+        new SignatureTemplate(owner),
       )
       .withFeePerByte(1)
       //.withHardcodedFee(minerFee)
-      .to(toAddr, change)
-      //.to(contract.address, change)
+      // .to(toAddr, change)
+      .to(contract.address, change)
       //.build()
       .send();
     
@@ -157,38 +94,9 @@ const Contract = () => {
       </div>
 
       <div className="field">
-        <label className="label">Arbiter Addr</label>
+        <label className="label">owner Addr</label>
         <div className="control">
-            {arbiterAddr}
-        </div>
-      </div>
-
-      <div className="field">
-        <label className="label">Buyer Addr</label>
-        <div className="control">
-            {buyerAddr}
-        </div>
-      </div>
-
-      <div className="field">
-        <label className="label">Seller Addr</label>
-        <div className="control">
-            {sellerAddr}
-        </div>
-      </div>
-
-      <div className="field">
-        <label className="label">Message Number</label>
-        <div className="control">
-          <div className="select" onChange={handleMessageChange}>
-              <select>
-                <option value={MessageTypes.One}>{MessageTypes.One}</option>
-                <option value={MessageTypes.Two}>{MessageTypes.Two}</option>
-                <option value={MessageTypes.Three}>{MessageTypes.Three}</option>
-                <option value={MessageTypes.Four}>{MessageTypes.Four}</option>
-              </select>
-            </div>
-            <p className="content has-text-danger	">{typeInfo}</p>
+            {ownerAddr}
         </div>
       </div>
      
